@@ -1280,9 +1280,24 @@ def main():
     st.title("🛫 Advanced Airline Support Agent")
     st.markdown("*Comprehensive airline services with 25+ specialized tools*")
     
+    # Initialize session state FIRST - before any other code
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    
+    if "history" not in st.session_state:
+        st.session_state.history = [SYSTEM_PROMPT]
+    
+    if "thread_id" not in st.session_state:
+        st.session_state.thread_id = uuid.uuid4().hex
+    
+    # PROMINENT CODEX PROJECT LINK
+    if CLEANLAB_PROJECT_ID:
+        codex_url = f"https://codex.cleanlab.ai/projects/{CLEANLAB_PROJECT_ID}/"
+        st.info(f"🔬 **AI Safety Monitoring**: [View Cleanlab Codex Project]({codex_url})")
+    
     # Show expanded capabilities
     with st.sidebar:
-        st.header("🔒 Security Status")
+        st.header("🔒 Project Status")
         if OPENAI_API_KEY:
             st.success("✅ OpenAI API Key: Configured")
         else:
@@ -1293,39 +1308,7 @@ def main():
         else:
             st.warning("⚠️ Cleanlab: Disabled")
         
-        st.header("🛠️ Available Tools")
-        st.markdown(f"**{len(tools)} specialized tools available:**")
-        
-        tool_categories = {
-            "✈️ Flight Services": ["search_one_way", "search_round_trip", "search_multi_city", "check_flight_status", "get_flight_details", "track_flight_route"],
-            "📋 Booking Management": ["retrieve_booking", "modify_booking", "cancel_booking"],
-            "💺 Seat Services": ["get_seat_map", "select_seat"],
-            "🧳 Baggage Services": ["check_baggage_allowance", "track_baggage", "report_baggage_issue"],
-            "🏢 Airport Info": ["get_airport_info", "check_security_wait_times", "find_airport_services"],
-            "🏆 Loyalty & Upgrades": ["check_miles_balance", "redeem_miles", "compare_upgrade_options"],
-            "🌟 Special Services": ["request_special_assistance", "book_lounge_access"],
-            "🌤️ Weather & Alerts": ["check_weather_impact", "get_disruption_alerts"],
-            "💰 Pricing & Fares": ["get_fare_rules", "compare_upgrade_options"]
-        }
-        
-        for category, tool_list in tool_categories.items():
-            with st.expander(category):
-                for tool in tool_list:
-                    st.write(f"• {tool}")
-    
-    # Initialize session state
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    
-    if "history" not in st.session_state:
-        st.session_state.history = [SYSTEM_PROMPT]
-    
-    if "thread_id" not in st.session_state:
-        st.session_state.thread_id = uuid.uuid4().hex
-    
-    # Sidebar with controls
-    with st.sidebar:
-        st.header("🎛️ Controls")
+        st.header("💬 Conversations")
         
         if st.button("🔄 New Conversation"):
             st.session_state.messages = []
@@ -1365,6 +1348,26 @@ def main():
                 for query in queries:
                     if st.button(query, key=f"example_{hash(query)}"):
                         st.session_state.example_query = query
+        
+        st.header("🛠️ Available Tools")
+        st.markdown(f"**{len(tools)} specialized tools available:**")
+        
+        tool_categories = {
+            "✈️ Flight Services": ["search_one_way", "search_round_trip", "search_multi_city", "check_flight_status", "get_flight_details", "track_flight_route"],
+            "📋 Booking Management": ["retrieve_booking", "modify_booking", "cancel_booking"],
+            "💺 Seat Services": ["get_seat_map", "select_seat"],
+            "🧳 Baggage Services": ["check_baggage_allowance", "track_baggage", "report_baggage_issue"],
+            "🏢 Airport Info": ["get_airport_info", "check_security_wait_times", "find_airport_services"],
+            "🏆 Loyalty & Upgrades": ["check_miles_balance", "redeem_miles", "compare_upgrade_options"],
+            "🌟 Special Services": ["request_special_assistance", "book_lounge_access"],
+            "🌤️ Weather & Alerts": ["check_weather_impact", "get_disruption_alerts"],
+            "💰 Pricing & Fares": ["get_fare_rules", "compare_upgrade_options"]
+        }
+        
+        for category, tool_list in tool_categories.items():
+            with st.expander(category):
+                for tool in tool_list:
+                    st.write(f"• {tool}")
     
     # Main chat interface
     chat_container = st.container()
