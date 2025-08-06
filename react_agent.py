@@ -56,14 +56,14 @@ You can help with: flight searches, bookings, seat selection, baggage, airport i
         except Exception as e:
             raise Exception(f"OpenAI API Error: {str(e)}")
     
-    def run_cleanlab_validation(self, query: str, messages: list, response: str, thread_id: str):
+    def run_cleanlab_validation(self, query: str, messages: list, response, thread_id: str):
         """Run Cleanlab validation if available"""
         if not self.cleanlab_project:
             return {"should_guardrail": False, "expert_answer": None, "error": "Cleanlab not available"}
         
         try:
             validate_params = {
-                "response": response,
+                "response": response,  # Pass the full OpenAI response object or string
                 "query": query,
                 "context": "",
                 "messages": messages,
@@ -74,7 +74,8 @@ You can help with: flight searches, bookings, seat selection, baggage, airport i
             vr = self.cleanlab_project.validate(**validate_params)
             return {
                 "should_guardrail": vr.should_guardrail,
-                "expert_answer": vr.expert_answer
+                "expert_answer": vr.expert_answer,
+                "escalated_to_sme": getattr(vr, 'escalated_to_sme', False)
             }
         except Exception as e:
             return {"should_guardrail": False, "expert_answer": None, "error": str(e)}
@@ -87,67 +88,43 @@ You can help with: flight searches, bookings, seat selection, baggage, airport i
             history.append({"role": "user", "content": user_input})
         
         # Query the LLM
-        msg = self.call_openai(history, temperature=0)
+        response = self.call_openai(history, temperature=0)
         
-        # Check if LLM wants to use tools
-        if msg.tool_calls:
-            # LLM decided to use a tool
-            tool_call = msg.tool_calls[0]
-            action = tool_call.function.name
-            args = json.loads(tool_call.function.arguments)
-            
-            # Add the structured message with tool calls to history
-            msg_dict = {
-                "role": "assistant",
-                "content": msg.content,
-                "tool_calls": [
-                    {
-                        "id": tool_call.id,
-                        "type": tool_call.type,
-                        "function": {
-                            "name": tool_call.function.name,
-                            "arguments": tool_call.function.arguments
-                        }
-                    }
-                ]
-            }
-            history.append(msg_dict)
-            
-            # Execute the tool using the imported TOOL_FUNCTIONS
-            if action in TOOL_FUNCTIONS:
-                tool_out = TOOL_FUNCTIONS[action](**args)
-            else:
-                tool_out = {"error": f"Tool {action} not implemented yet"}
-            
-            # Add tool result to history
-            tool_result = json.dumps(tool_out, indent=2)
-            history.append({
-                "role": "tool",
-                "content": tool_result,
-                "tool_call_id": tool_call.id
-            })
-            
-            # VALIDATE AFTER TOOL RESULT IS ADDED (complete context)
-            tool_selection_validation = self.run_cleanlab_validation(
-                query=user_input,
-                messages=history,  # Now includes tool result
-                response=f"Tool call: {action} with args {args} -> {tool_result[:200]}...",
-                thread_id=thread_id
-            )
-            
-            return history, True, f"🔧 Using tool: {action} with {args}", tool_selection_validation
+        ### Cleanlab API ###
+        validation_result = self.run_cleanlab_validation(
+            query=user_input,
+            messages=history,
+            response=response, 
+            tools=tools, # Pass the full response object
+            metadata={"thread_id": thread_id},
+        )
         
+        # Get final response after Cleanlab validation (you can implement get_final_response_with_cleanlab later)
+        # For now, we'll use the original response
+        final_response = response
+        ### End of new code to add for Cleanlab API ###
+        
+        # Add the LLM response to history
+        history.append(final_response.choices[0].message)
+        
+        # Check if there are tool calls
+        if not final_response.choices[0].message.tool_calls:
+            # No tool calls - conversation is complete
+            return history, False, final_response.choices[0].message.content, validation_result
         else:
-            # LLM provided a final response
-            final_response = msg.content
-            history.append({"role": "assistant", "content": final_response})
+            # Handle tool calls - match the exact pattern from your example
+            tools_for_print = []
+            for tool_call in final_response.choices[0].message.tool_calls:
+                args = json.loads(tool_call.function.arguments)
+                tool_response = TOOL_FUNCTIONS[tool_call.function.name](**args) if tool_call.function.name in TOOL_FUNCTIONS else {"error": f"Tool {tool_call.function.name} not implemented yet"}
+                
+                tool_dict = {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": str(tool_response),
+                }
+                history.append(tool_dict)
+                tools_for_print.append(tool_dict)
             
-            # VALIDATE THE FINAL RESPONSE
-            final_response_validation = self.run_cleanlab_validation(
-                query=user_input,
-                messages=history,
-                response=final_response,
-                thread_id=thread_id
-            )
-            
-            return history, False, final_response, final_response_validation 
+            # Return with continue=True since we executed tools
+            return history, True, f"🔧 Executed tools: {tools_for_print}", validation_result 
