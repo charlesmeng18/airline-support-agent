@@ -47,7 +47,7 @@ You can help with: flight searches, bookings, seat selection, baggage, airport i
         """Call OpenAI API with error handling"""
         try:
             resp = self.llm_client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4.1-mini",
                 messages=messages,
                 tools=tools,
                 **kwargs
