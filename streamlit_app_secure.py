@@ -106,6 +106,61 @@ def main():
         codex_url = f"https://codex.cleanlab.ai/projects/{CLEANLAB_PROJECT_ID}/"
         st.info(f"🔬 **AI Safety Monitoring**: [View Cleanlab Codex Project]({codex_url})")
     
+    # PROMINENT SAMPLE QUERIES - Show when no conversation has started
+    if len(st.session_state.messages) == 0:
+        st.markdown("---")
+        st.markdown("### 🚀 **Try these sample queries to get started:**")
+        
+        # Create columns for better layout
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### ✈️ **Flight Operations**")
+            flight_queries = [
+                "Find flights from SFO to LAX on 2025-03-15",
+                "Search business class round-trip NYC to London",
+                "Book flight AA123 on May 15th for John Doe",
+                "Check status of flight DL456"
+            ]
+            for query in flight_queries:
+                if st.button(query, key=f"main_{hash(query)}", use_container_width=True):
+                    st.session_state.example_query = query
+                    st.rerun()
+        
+        with col2:
+            st.markdown("#### 🎯 **Popular Services**")
+            service_queries = [
+                "What restaurants are at JFK airport?",
+                "Track my baggage tag 123456789",
+                "Retrieve my booking ABC123",
+                "Request wheelchair assistance"
+            ]
+            for query in service_queries:
+                if st.button(query, key=f"main_{hash(query)}", use_container_width=True):
+                    st.session_state.example_query = query
+                    st.rerun()
+        
+        # Additional prominent examples in a single row
+        st.markdown("#### 🌟 **Advanced Features**")
+        col3, col4, col5 = st.columns(3)
+        
+        with col3:
+            if st.button("Multi-city trip planner", key="multi_city", use_container_width=True):
+                st.session_state.example_query = "Plan a multi-city trip: NYC→LA→Vegas→NYC in April"
+                st.rerun()
+        
+        with col4:
+            if st.button("Weather impact checker", key="weather", use_container_width=True):
+                st.session_state.example_query = "Check weather impact on flights at Miami airport"
+                st.rerun()
+        
+        with col5:
+            if st.button("Miles & upgrades", key="miles", use_container_width=True):
+                st.session_state.example_query = "Check my frequent flyer miles balance FF123456"
+                st.rerun()
+        
+        st.markdown("---")
+    
     # Show expanded capabilities
     with st.sidebar:
         st.header("🔒 Project Status")
