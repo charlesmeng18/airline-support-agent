@@ -1,13 +1,16 @@
 import json
 from openai import OpenAI
 from cleanlab_codex.client import Client as CleanlabClient
+from braintrust import init_logger, traced, wrap_openai
+
 from tools import tools, TOOL_FUNCTIONS
 
 class ReactAgent:
     def __init__(self, openai_api_key: str, cleanlab_project=None):
         self.openai_api_key = openai_api_key
         self.cleanlab_project = cleanlab_project
-        self.llm_client = OpenAI(api_key=openai_api_key)
+        self.llm_client = wrap_openai(OpenAI(api_key=openai_api_key))
+        self.logger = init_logger(project="Airline Support Agent")
         
         # System prompt for the agent
         self.system_prompt = {
@@ -43,6 +46,7 @@ You can help with: flight searches, bookings, seat selection, baggage, airport i
 """
         }
     
+    @traced
     def call_openai(self, messages: list, **kwargs):
         """Call OpenAI API with error handling"""
         try:
@@ -56,14 +60,18 @@ You can help with: flight searches, bookings, seat selection, baggage, airport i
         except Exception as e:
             raise Exception(f"OpenAI API Error: {str(e)}")
     
+    @traced
     def run_cleanlab_validation(self, query: str, messages: list, response, thread_id: str, tools=None, metadata=None):
         """Run Cleanlab validation if available"""
         if not self.cleanlab_project:
             return {"should_guardrail": False, "expert_answer": None, "error": "Cleanlab not available"}
         
         try:
+            # Extract the response content as a string for Cleanlab validation
+            response_content = response.content
+            
             validate_params = {
-                "response": response,  # Pass the full OpenAI response object or string
+                "response": response_content,  # Pass the response content as a string
                 "query": query,
                 "context": "",
                 "messages": messages,
@@ -80,6 +88,7 @@ You can help with: flight searches, bookings, seat selection, baggage, airport i
         except Exception as e:
             return {"should_guardrail": False, "expert_answer": None, "error": str(e)}
     
+    @traced
     def react_step(self, user_input: str, history: list, thread_id: str):
         """Single step of the ReACT agent - returns updated history and whether to continue"""
         
@@ -107,7 +116,7 @@ You can help with: flight searches, bookings, seat selection, baggage, airport i
                 messages=history,
                 response=response, 
                 tools=tools, # Pass the full response object
-                metadata={"thread_id": thread_id},
+                thread_id=thread_id
             )
             print(f"DEBUG: Cleanlab validation result: {validation_result}")
         except Exception as e:
