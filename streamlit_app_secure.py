@@ -79,9 +79,14 @@ cl_project = get_cleanlab_client()
 # Initialize the ReactAgent
 @st.cache_resource
 def get_react_agent():
-    return ReactAgent(OPENAI_API_KEY, cl_project)
+    print(f"DEBUG: Initializing ReactAgent with OpenAI key: {bool(OPENAI_API_KEY)}")
+    print(f"DEBUG: Cleanlab project: {bool(cl_project)}")
+    agent = ReactAgent(OPENAI_API_KEY, cl_project)
+    print(f"DEBUG: ReactAgent initialized successfully")
+    return agent
 
 agent = get_react_agent()
+print(f"DEBUG: Agent object created: {type(agent)}")
 
 # System prompt for conversation history
 SYSTEM_PROMPT = agent.system_prompt
@@ -284,9 +289,14 @@ def main():
             try:
                 for iteration in range(max_iterations):
                     with st.spinner(f"🤔 Thinking... (Step {iteration + 1})"):
+                        print(f"DEBUG: About to call agent.react_step with user_input: {user_input}")
+                        print(f"DEBUG: Current history length: {len(current_history)}")
+                        print(f"DEBUG: Thread ID: {st.session_state.thread_id}")
+                        
                         history, continue_loop, response, extra_info = agent.react_step(
                             user_input, current_history, st.session_state.thread_id
                         )
+                        print(f"DEBUG: react_step returned - continue_loop: {continue_loop}, response: {response}")
                         current_history = history
                     
                     if continue_loop:

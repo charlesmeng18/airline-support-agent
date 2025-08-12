@@ -56,7 +56,7 @@ You can help with: flight searches, bookings, seat selection, baggage, airport i
         except Exception as e:
             raise Exception(f"OpenAI API Error: {str(e)}")
     
-    def run_cleanlab_validation(self, query: str, messages: list, response, thread_id: str):
+    def run_cleanlab_validation(self, query: str, messages: list, response, thread_id: str, tools=None, metadata=None):
         """Run Cleanlab validation if available"""
         if not self.cleanlab_project:
             return {"should_guardrail": False, "expert_answer": None, "error": "Cleanlab not available"}
@@ -67,7 +67,7 @@ You can help with: flight searches, bookings, seat selection, baggage, airport i
                 "query": query,
                 "context": "",
                 "messages": messages,
-                "metadata": {"integration": "airline-support-streamlit", "thread_id": thread_id},
+                "metadata": metadata or {"integration": "airline-support-streamlit", "thread_id": thread_id},
                 "tools": tools
             }
             
@@ -83,38 +83,68 @@ You can help with: flight searches, bookings, seat selection, baggage, airport i
     def react_step(self, user_input: str, history: list, thread_id: str):
         """Single step of the ReACT agent - returns updated history and whether to continue"""
         
+        print(f"DEBUG: Starting react_step with input: {user_input}")
+        print(f"DEBUG: History length: {len(history)}")
+        
         # Add user input to history only if it's not already the last message
         if not history or not (history[-1].get("role") == "user" and history[-1].get("content") == user_input):
             history.append({"role": "user", "content": user_input})
         
+        print(f"DEBUG: About to call OpenAI API")
         # Query the LLM
-        response = self.call_openai(history, temperature=0)
+        try:
+            response = self.call_openai(history, temperature=0)
+            print(f"DEBUG: OpenAI response received: {type(response)}")
+            print(f"DEBUG: Response content: {getattr(response, 'content', 'NO CONTENT')}")
+        except Exception as e:
+            print(f"DEBUG: OpenAI API error: {e}")
+            raise e
         
         ### Cleanlab API ###
-        validation_result = self.run_cleanlab_validation(
-            query=user_input,
-            messages=history,
-            response=response, 
-            tools=tools, # Pass the full response object
-            metadata={"thread_id": thread_id},
-        )
+        try:
+            validation_result = self.run_cleanlab_validation(
+                query=user_input,
+                messages=history,
+                response=response, 
+                tools=tools, # Pass the full response object
+                metadata={"thread_id": thread_id},
+            )
+            print(f"DEBUG: Cleanlab validation result: {validation_result}")
+        except Exception as e:
+            print(f"DEBUG: Cleanlab validation error: {e}")
+            validation_result = {"should_guardrail": False, "expert_answer": None, "error": str(e)}
         
         # Get final response after Cleanlab validation (you can implement get_final_response_with_cleanlab later)
         # For now, we'll use the original response
         final_response = response
         ### End of new code to add for Cleanlab API ###
         
+        print(f"DEBUG: Final response type: {type(final_response)}")
+        print(f"DEBUG: Final response has tool_calls: {hasattr(final_response, 'tool_calls')}")
+        if hasattr(final_response, 'tool_calls'):
+            print(f"DEBUG: Tool calls: {final_response.tool_calls}")
+        
+        # Convert message object to dict format for history
+        assistant_message = {
+            "role": final_response.role,
+            "content": final_response.content,
+        }
+        if hasattr(final_response, 'tool_calls') and final_response.tool_calls:
+            assistant_message["tool_calls"] = final_response.tool_calls
+        
         # Add the LLM response to history
-        history.append(final_response.choices[0].message)
+        history.append(assistant_message)
         
         # Check if there are tool calls
-        if not final_response.choices[0].message.tool_calls:
+        if not final_response.tool_calls:
             # No tool calls - conversation is complete
-            return history, False, final_response.choices[0].message.content, validation_result
+            print(f"DEBUG: No tool calls, returning final response")
+            return history, False, final_response.content, validation_result
         else:
             # Handle tool calls - match the exact pattern from your example
+            print(f"DEBUG: Processing tool calls")
             tools_for_print = []
-            for tool_call in final_response.choices[0].message.tool_calls:
+            for tool_call in final_response.tool_calls:
                 args = json.loads(tool_call.function.arguments)
                 tool_response = TOOL_FUNCTIONS[tool_call.function.name](**args) if tool_call.function.name in TOOL_FUNCTIONS else {"error": f"Tool {tool_call.function.name} not implemented yet"}
                 
@@ -127,4 +157,5 @@ You can help with: flight searches, bookings, seat selection, baggage, airport i
                 tools_for_print.append(tool_dict)
             
             # Return with continue=True since we executed tools
+            print(f"DEBUG: Returning with tool execution")
             return history, True, f"🔧 Executed tools: {tools_for_print}", validation_result 
