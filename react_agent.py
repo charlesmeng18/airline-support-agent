@@ -51,7 +51,7 @@ You can help with: flight searches, bookings, seat selection, baggage, airport i
         """Call OpenAI API with error handling"""
         try:
             resp = self.llm_client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4.1-mini",
                 messages=messages,
                 tools=tools,
                 **kwargs
@@ -68,7 +68,7 @@ You can help with: flight searches, bookings, seat selection, baggage, airport i
         
         try:
             # Extract the response content as a string for Cleanlab validation
-            response_content = response.content
+            response_content = response.content if hasattr(response, 'content') else str(response)
             
             validate_params = {
                 "response": response_content,  # Pass the response content as a string
